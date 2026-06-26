@@ -501,16 +501,19 @@ function FilterGroup({
 function Timeline({
   activeYear,
   className,
+  mode = "desktop",
   onOpenChange,
   onSelectYear,
   timelineYears,
 }: {
   activeYear: string;
   className?: string;
+  mode?: "desktop" | "mobile";
   onOpenChange?: (open: boolean) => void;
   onSelectYear: (year: string) => void;
   timelineYears: string[];
 }) {
+  const mobile = mode === "mobile";
   const draggingRef = useRef(false);
   const leaveDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [timelineOpen, setTimelineOpen] = useState(false);
@@ -526,6 +529,18 @@ function Timeline({
 
     setTimelineOpen(true);
     onOpenChange?.(true);
+  }, [onOpenChange]);
+
+  const closeTimelineImmediately = useCallback(() => {
+    if (leaveDelayRef.current) {
+      clearTimeout(leaveDelayRef.current);
+      leaveDelayRef.current = null;
+    }
+
+    draggingRef.current = false;
+    setHoveredYearIndex(null);
+    setTimelineOpen(false);
+    onOpenChange?.(false);
   }, [onOpenChange]);
 
   const closeTimeline = useCallback(() => {
@@ -584,16 +599,18 @@ function Timeline({
         "relative h-[19px] text-[10px] leading-[1.2] tracking-none md:sticky md:top-[282px] md:h-[260px]",
         className,
       )}
-      onPointerEnter={openTimeline}
-      onFocus={openTimeline}
-      onPointerLeave={closeTimeline}
-      onBlur={closeTimeline}
+      onPointerEnter={mobile ? undefined : openTimeline}
+      onFocus={mobile ? undefined : openTimeline}
+      onPointerLeave={mobile ? undefined : closeTimeline}
+      onBlur={mobile ? undefined : closeTimeline}
     >
       <div
         className={cn(
           "flex h-[14px] items-start gap-[6px] transition-opacity duration-150",
+          mobile && "cursor-pointer",
           timelineOpen && "opacity-0",
         )}
+        onClick={mobile ? openTimeline : undefined}
       >
         <span
           className={cn(
@@ -604,7 +621,7 @@ function Timeline({
         <button
           type="button"
           className="h-[14px] leading-[1.2]"
-          onClick={() => onSelectYear(activeYear)}
+          onClick={mobile ? openTimeline : () => onSelectYear(activeYear)}
         >
           {activeYear}
         </button>
@@ -613,9 +630,15 @@ function Timeline({
       <div
         className={cn(
           "absolute left-0 top-0 h-[260px] transition-opacity duration-200",
-          timelineOpen ? "opacity-100" : "opacity-0",
+          timelineOpen
+            ? "pointer-events-auto opacity-100"
+            : "pointer-events-none opacity-0",
         )}
         onPointerDown={(event) => {
+          if (mobile && !timelineOpen) {
+            return;
+          }
+
           draggingRef.current = true;
           event.currentTarget.setPointerCapture(event.pointerId);
           selectYearFromPointer(event.clientY, event.currentTarget);
@@ -635,6 +658,19 @@ function Timeline({
           draggingRef.current = false;
         }}
       >
+        {mobile ? (
+          <button
+            type="button"
+            className="absolute right-0 top-0 h-[19px] px-[2px] uppercase leading-[1.2] text-ink/50"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              closeTimelineImmediately();
+            }}
+          >
+            [ CLOSE]
+          </button>
+        ) : null}
         <span
           className={cn(
             "absolute left-0 h-px bg-line/30 transition-[top,width] duration-200",
@@ -1201,7 +1237,8 @@ export function HomePage() {
             >
               <Timeline
                 activeYear={activeTimelineYear || timelineYears[0] || ""}
-                className={cn(timelineOpen && "h-[260px]")}
+                className={cn("w-full", timelineOpen && "h-[260px]")}
+                mode="mobile"
                 onOpenChange={setTimelineOpen}
                 timelineYears={timelineYears}
                 onSelectYear={scrollToTimelineYear}
